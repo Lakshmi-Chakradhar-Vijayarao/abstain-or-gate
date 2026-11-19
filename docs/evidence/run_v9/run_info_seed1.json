@@ -1,0 +1,72 @@
+{
+ "seed": 1,
+ "config": {
+  "base_model": "Qwen/Qwen2.5-3B-Instruct",
+  "lora_r": 16,
+  "lora_alpha": 32,
+  "lora_dropout": 0.05,
+  "sft_lr": 0.0002,
+  "sft_epochs": 2.0,
+  "dpo_lr": 5e-06,
+  "dpo_epochs": 1.0,
+  "dpo_beta": 0.1,
+  "batch_size": 1,
+  "grad_accum": 16,
+  "max_length": 4096,
+  "max_steps": -1,
+  "target_modules": [
+   "q_proj",
+   "k_proj",
+   "v_proj",
+   "o_proj",
+   "gate_proj",
+   "up_proj",
+   "down_proj"
+  ]
+ },
+ "cuda": true,
+ "gpus": [
+  "Tesla T4",
+  "Tesla T4"
+ ],
+ "sft_examples": 87,
+ "sft_train": {
+  "train_runtime": 529.6913,
+  "train_samples_per_second": 0.328,
+  "train_steps_per_second": 0.023,
+  "total_flos": 3088319333007360.0,
+  "train_loss": 0.4408927410840988,
+  "entropy": 0.21530300963406815,
+  "mean_token_accuracy": 0.9577063529387765,
+  "num_tokens": 183520.0,
+  "epoch": 2.0
+ },
+ "sft_hours": 0.16454424493842654,
+ "dpo_train": {
+  "train_runtime": 1171.1223,
+  "train_samples_per_second": 0.131,
+  "train_steps_per_second": 0.009,
+  "total_flos": 5644597739077632.0,
+  "train_loss": 0.6155224800109863,
+  "epoch": 1.0
+ },
+ "dpo_log_history": [
+  {
+   "loss": 0.6155224800109863,
+   "rewards/chosen": -0.0005328536378340675,
+   "rewards/rejected": -0.165839018684951,
+   "rewards/accuracies": 0.8311688311688312,
+   "rewards/margins": 0.16530616482260166,
+   "logps/chosen": -16.547177906837558,
+   "logps/rejected": -10.331609399578014,
+   "epoch": 1.0,
+   "step": 10
+  },
+  {
+   "epoch": 1.0,
+   "step": 10
+  }
+ ],
+ "dpo_hours": 0.33610564079549576,
+ "gpu_hours": 1.0012997714678447
+}
