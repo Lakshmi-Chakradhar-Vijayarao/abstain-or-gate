@@ -102,3 +102,12 @@ All arms use the same retrieval, prompt (except arm 2) and verifier. Arms 1–4 
 - **Known issues reported with every result:**
   - **The same question appears across the split under two roles.** Two security questions, `sec-005`/`sec-003` and `sec-001`/`sec-004`, appear in dev and test under different roles with opposite answerability. The splits are by document, so the frozen split is kept. The pair is reported as a memorisation-leak probe; future splits will deduplicate by question text.
   - **The pairs are unbalanced.** With judge labels, version 9 had 10 type-A against 144 type-B pairs. DPO therefore mostly teaches "answer rather than abstain". This is stated next to any DPO result, and the arms' coverage is read with it.
+- **19 Nov 2026, still before kernel version 10's results were seen: ties are split at the coverage cut.**
+  - **Why:** many answers share the same support score, often 0. A plain threshold drops every tied answer, so a "matched" arm can land far below the target. In a re-analysis of version 9, the trained arm reached 0.320 coverage while base reached 0.559.
+  - **The near-miss:** under judge labels, that mismatch alone produced a spurious "replace" verdict (+0.093 [+0.037, +0.149]).
+  - **Now:** the cut keeps every answer above the threshold plus a fixed, hash-chosen share of the tied ones (`selective.cut_for_coverage`). The two arms then land at 0.582 and 0.619 test coverage.
+  - **Version 9 re-analysed with both fixes** (exploratory, `docs/evidence/run_v9/reanalysis/`): "neither" under both scorers.
+    - Replace: token −0.268 [−0.332, −0.205]; judge −0.290 [−0.349, −0.231].
+    - The trained model is far worse at equal coverage, because of the citation-only targets.
+- **19 Nov 2026: the base arms' "seed slots" were copies.** The three base seed slots in version 9, and in version 10, which runs the same code, contain the same 2 runs with identical answers, because the sampling seed did not change per slot. Point estimates are unaffected, but "6 runs" for base arms means 2 distinct runs. Future runs seed each slot separately (`run_project2.py`, `seed=10_000 * s`).
+- **Judge-scored test arms are reported next to token-scored ones,** with the citation-only rule applied (`docs/evidence/run_v9/judged/`). The judge also credits truncated partial answers (gatedrag `docs/MEASURING_RUN.md` §7); no arm here is length-capped.

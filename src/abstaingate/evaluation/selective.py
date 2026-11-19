@@ -47,19 +47,45 @@ def aurc(rows: list[dict]) -> float:
     return float((np.cumsum(err) / np.arange(1, err.size + 1)).mean())
 
 
-def gate(rows: list[dict], threshold: float) -> list[dict]:
+def _tie_draw(item: str) -> float:
+    """A fixed pseudo-random number in [0, 1) per item, for splitting ties reproducibly."""
+    import hashlib
+    return int(hashlib.md5(item.encode()).hexdigest()[:8], 16) / 2 ** 32
+
+
+def gate(rows: list[dict], threshold: float, tie_keep: float = 1.0) -> list[dict]:
     """Apply a support threshold to answers the model gave; a gated-out item scores like the
-    model's own abstention (correct only on unanswerable items)."""
+    model's own abstention (correct only on unanswerable items). Answers with conf > threshold are
+    kept; answers with conf == threshold are kept for the share `tie_keep` of items (chosen by a
+    fixed hash of the item id), so a coverage target can be met even when many scores tie."""
     out = []
     for r in rows:
-        keep = bool(r["answered"] and r["conf"] >= threshold)
+        keep = bool(r["answered"] and (r["conf"] > threshold or
+                                       (r["conf"] == threshold and _tie_draw(r["item"]) < tie_keep)))
         out.append({**r, "answered": keep,
                     "correct": r["correct"] if keep else (0.0 if r["answerable"] else 1.0)})
     return out
 
 
+def cut_for_coverage(rows: list[dict], target: float) -> tuple[float, float]:
+    """(threshold, tie_keep) for `gate` so that it answers about `target` of the items: every answer
+    scored above the threshold, plus the share `tie_keep` of those scored exactly at it."""
+    confs = sorted((r["conf"] for r in rows if r["answered"]), reverse=True)
+    m = math.floor(target * len(rows))
+    if m >= len(confs):
+        return -math.inf, 1.0                       # the model never answers that much: no gating needed
+    if m == 0:
+        return math.inf, 0.0
+    v = confs[m - 1]
+    above = sum(c > v for c in confs)
+    tied = sum(c == v for c in confs)
+    return float(v), (m - above) / tied
+
+
 def threshold_for_coverage(rows: list[dict], target: float) -> float:
-    """A support threshold whose gate answers about `target` of the items (never more)."""
+    """A support threshold whose gate answers about `target` of the items (never more). Ties at the
+    cut are dropped entirely, so with many tied scores coverage can fall far below the target; use
+    `cut_for_coverage` for comparisons at matched coverage."""
     confs = sorted((r["conf"] for r in rows if r["answered"]), reverse=True)
     k = math.floor(target * len(rows))
     if k >= len(confs):

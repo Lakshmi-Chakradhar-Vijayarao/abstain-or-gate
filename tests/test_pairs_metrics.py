@@ -219,3 +219,15 @@ def test_common_coverage_when_the_trained_arm_answers_more(tmp_path):
     t = res["table"]
     assert abs(t["sft_dpo_matched"]["coverage"] - t["base_gate_matched"]["coverage"]) < 0.12
     assert t["sft_dpo_matched"]["coverage"] < t["sft_dpo"]["coverage"] - 0.2
+
+
+def test_cut_for_coverage_splits_ties():
+    """With many tied scores a plain threshold drops every tie; the cut keeps a share of them."""
+    rows = [{"item": f"q{i}", "answered": True, "conf": 0.0 if i < 70 else 0.9, "correct": 1.0, "answerable": True}
+            for i in range(100)]
+    thr, q = selective.cut_for_coverage(rows, 0.5)
+    assert thr == 0.0 and abs(q - 20 / 70) < 1e-9
+    cov = selective.coverage(selective.gate(rows, thr, q))
+    assert abs(cov - 0.5) < 0.08
+    plain = selective.coverage(selective.gate(rows, selective.threshold_for_coverage(rows, 0.5)))
+    assert plain == 0.3                             # the old cut: all 70 ties dropped

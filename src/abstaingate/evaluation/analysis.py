@@ -13,6 +13,8 @@ gate can only remove answers. When SFT -> DPO answers MORE often than the base m
 arm cannot be gated up to it (the old code then set the threshold to -inf and compared ungated arms).
 Both arms are therefore compared at the common coverage c = min(dev coverage of each): whichever arm
 answers more is gated down to c by a threshold on its own dev support, the other is left as is.
+Many answers tie on support (often at 0), so the cut keeps a fixed, hash-chosen share of the tied
+answers (`selective.cut_for_coverage`); a plain threshold drops every tie and can miss c by far.
 `sft_dpo_matched` is SFT -> DPO at c; the base, log-prob and self-consistency arms are cut to c too.
 
   replace?     selective accuracy, arm 4 (SFT -> DPO) vs arm 5, at that matched coverage
@@ -31,12 +33,12 @@ from abstaingate.evaluation.selective import (
     consistency_scores,
     cost_per_question,
     coverage,
+    cut_for_coverage,
     gate,
     paired_cluster_bootstrap,
     report,
     rows_from_pool,
     selective_accuracy,
-    threshold_for_coverage,
 )
 
 RUN_ARMS = {"base": "test_base", "base_prompt": "test_base_prompt", "sft": "test_sft", "sft_dpo": "test_sft_dpo",
@@ -71,30 +73,30 @@ def analyse(pool_dir: str | Path, n_boot: int = 2000) -> dict:
         dpo = _load(d / f"test_sft_dpo_seed{s}.json")
         if dev_base and dev_dpo and base and dpo:
             target = min(coverage(dev_dpo), coverage(dev_base))     # common coverage (see module docstring)
-            thr = threshold_for_coverage(dev_base, target)
-            t_dpo = threshold_for_coverage(dev_dpo, target)
-            thresholds[s] = {"dev_coverage_target": target, "support_threshold": thr,
-                             "sft_dpo_support_threshold": t_dpo,
+            thr, q = cut_for_coverage(dev_base, target)
+            t_dpo, q_dpo = cut_for_coverage(dev_dpo, target)
+            thresholds[s] = {"dev_coverage_target": target, "support_threshold": thr, "support_tie_keep": q,
+                             "sft_dpo_support_threshold": t_dpo, "sft_dpo_tie_keep": q_dpo,
                              "dev_coverage_base": coverage(dev_base), "dev_coverage_sft_dpo": coverage(dev_dpo)}
-            arms.setdefault("base_gate_matched", []).extend(gate(rows, thr) for rows in _runs(base))
-            arms.setdefault("sft_dpo_matched", []).extend(gate(rows, t_dpo) for rows in _runs(dpo))
+            arms.setdefault("base_gate_matched", []).extend(gate(rows, thr, q) for rows in _runs(base))
+            arms.setdefault("sft_dpo_matched", []).extend(gate(rows, t_dpo, q_dpo) for rows in _runs(dpo))
             # confidence baselines at the same matched coverage: the cheap alternatives training must beat
             dev_pool = _load(d / "dev_base_openloop.json")
             if dev_pool and "records" in base:
                 lp_dev = [r for k in range(len(dev_pool["runs"])) for r in rows_from_pool(dev_pool, k, "logprob")]
                 if any(r["conf"] != float("-inf") for r in lp_dev):
-                    t_lp = threshold_for_coverage(lp_dev, target)
+                    t_lp, q_lp = cut_for_coverage(lp_dev, target)
                     thresholds[s]["logprob_threshold"] = t_lp
                     arms.setdefault("base_logprob_matched", []).extend(
-                        gate(rows_from_pool(base, k, "logprob"), t_lp) for k in range(len(base["runs"])))
+                        gate(rows_from_pool(base, k, "logprob"), t_lp, q_lp) for k in range(len(base["runs"])))
                 sc_test = _load(d / "test_base_selfconsistency.json")
                 if sc_test and len(dev_pool.get("records", [])) >= 3:
                     c_dev, c_test = consistency_scores(dev_pool), consistency_scores(sc_test)
                     cd = [r for k in range(len(dev_pool["runs"])) for r in rows_from_pool(dev_pool, k, "consistency", c_dev)]
-                    t_c = threshold_for_coverage(cd, target)
+                    t_c, q_c = cut_for_coverage(cd, target)
                     thresholds[s]["consistency_threshold"] = t_c
                     arms.setdefault("base_consistency_matched", []).extend(
-                        gate(rows_from_pool(base, k, "consistency", c_test), t_c) for k in range(len(base["runs"])))
+                        gate(rows_from_pool(base, k, "consistency", c_test), t_c, q_c) for k in range(len(base["runs"])))
 
     keys = ["coverage", "selective_accuracy", "aurc", "cost_per_question", "sel_acc@70%", "sel_acc@80%",
             "sel_acc@90%", "over_abstention", "accuracy_answerable"]

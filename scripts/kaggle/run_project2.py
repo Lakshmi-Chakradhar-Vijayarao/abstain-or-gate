@@ -158,11 +158,12 @@ def stop(proc) -> None:
     log("warning: GPU memory still in use after stopping vLLM")
 
 
-def pool(name: str, gen, cfg, items, k: int, calibrator=None) -> dict:
+def pool(name: str, gen, cfg, items, k: int, calibrator=None, seed: int = 0) -> dict:
     path = OUT / f"{name}.json"
     if path.exists():
         return load_pool(path)
-    p = run_pool(Pipeline(retriever, gen, cfg, calibrator=calibrator), items, k=k, concurrency=1 if DRY else 16)
+    p = run_pool(Pipeline(retriever, gen, cfg, calibrator=calibrator), items, k=k, seed=seed,
+                 concurrency=1 if DRY else 16)
     save_pool(p, path)
     log(f"{name}: {k} runs x {len(items)} items")
     return p
@@ -182,10 +183,13 @@ dev_base = pool("dev_base_openloop", gen, open_loop, dev_items, K_DEV)
 
 # arms 1, 2, 5 and the self-consistency baseline use the base model: run them while it is served
 cal_base = calibrator_from(dev_base)
-for s in SEEDS:   # base arms have no training seed; the K test runs are repeated per seed slot for pairing
-    pool(f"test_base_seed{s}", gen, open_loop, test_items, K_TEST)
-    pool(f"test_base_prompt_seed{s}", gen, open_loop.with_(prompt_variant="abstain_strong"), test_items, K_TEST)
-    pool(f"test_base_gate_seed{s}", gen, cfg0, test_items, K_TEST, calibrator=cal_base)
+# Base arms have no training seed. Each seed slot gets its own sampling seed (10,000 * s): with a shared
+# seed the three slots were identical copies of the same 2 runs (found in kernel version 9).
+for s in SEEDS:
+    pool(f"test_base_seed{s}", gen, open_loop, test_items, K_TEST, seed=10_000 * s)
+    pool(f"test_base_prompt_seed{s}", gen, open_loop.with_(prompt_variant="abstain_strong"), test_items, K_TEST,
+         seed=10_000 * s)
+    pool(f"test_base_gate_seed{s}", gen, cfg0, test_items, K_TEST, calibrator=cal_base, seed=10_000 * s)
 pool("test_base_selfconsistency", gen, open_loop, test_items, K_SC)
 stop(proc)
 
@@ -248,10 +252,11 @@ for s in SEEDS:
         shutil.copytree(run_dir / adapter, keep / adapter, dirs_exist_ok=True)
     for arm, sub in (("sft", "sft_merged"), ("sft_dpo", "dpo_merged")):
         proc, gen = serve(str(run_dir / sub))
-        pool(f"test_{arm}_seed{s}", gen, open_loop, test_items, K_TEST)
+        pool(f"test_{arm}_seed{s}", gen, open_loop, test_items, K_TEST, seed=10_000 * s)
         if arm == "sft_dpo":
             dev_dpo = pool(f"dev_sft_dpo_openloop_seed{s}", gen, open_loop, dev_items, 2)
-            pool(f"test_sft_dpo_gate_seed{s}", gen, cfg0, test_items, K_TEST, calibrator=calibrator_from(dev_dpo))
+            pool(f"test_sft_dpo_gate_seed{s}", gen, cfg0, test_items, K_TEST, calibrator=calibrator_from(dev_dpo),
+                 seed=10_000 * s)
         stop(proc)
     if s == SEEDS[0]:
         lm_eval_side_effects("sft", run_dir / "sft_merged")
