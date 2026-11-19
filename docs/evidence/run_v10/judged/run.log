@@ -1,0 +1,22 @@
+[   0.9 min] vLLM venv ok
+[   5.7 min] serving judge mistralai/Mistral-7B-Instruct-v0.3 on 2 GPU(s)
+[   5.9 min] test_base_gate_seed0.json: {'model': 'openai-compatible:mistralai/Mistral-7B-Instruct-v0.3', 'judged': 125, 'unparsed': 0, 'contentless_scored_wrong': 0, 'prompt_version': 2}
+[   6.1 min] test_base_gate_seed1.json: {'model': 'openai-compatible:mistralai/Mistral-7B-Instruct-v0.3', 'judged': 125, 'unparsed': 0, 'contentless_scored_wrong': 0, 'prompt_version': 2}
+[   6.2 min] test_base_gate_seed2.json: {'model': 'openai-compatible:mistralai/Mistral-7B-Instruct-v0.3', 'judged': 125, 'unparsed': 0, 'contentless_scored_wrong': 0, 'prompt_version': 2}
+[   6.6 min] test_base_prompt_seed0.json: {'model': 'openai-compatible:mistralai/Mistral-7B-Instruct-v0.3', 'judged': 255, 'unparsed': 0, 'contentless_scored_wrong': 21, 'prompt_version': 2}
+[   7.1 min] test_base_prompt_seed1.json: {'model': 'openai-compatible:mistralai/Mistral-7B-Instruct-v0.3', 'judged': 255, 'unparsed': 0, 'contentless_scored_wrong': 21, 'prompt_version': 2}
+[   7.5 min] test_base_prompt_seed2.json: {'model': 'openai-compatible:mistralai/Mistral-7B-Instruct-v0.3', 'judged': 255, 'unparsed': 0, 'contentless_scored_wrong': 21, 'prompt_version': 2}
+[   7.9 min] test_base_seed0.json: {'model': 'openai-compatible:mistralai/Mistral-7B-Instruct-v0.3', 'judged': 247, 'unparsed': 0, 'contentless_scored_wrong': 44, 'prompt_version': 2}
+[   8.3 min] test_base_seed1.json: {'model': 'openai-compatible:mistralai/Mistral-7B-Instruct-v0.3', 'judged': 247, 'unparsed': 0, 'contentless_scored_wrong': 44, 'prompt_version': 2}
+[   8.8 min] test_base_seed2.json: {'model': 'openai-compatible:mistralai/Mistral-7B-Instruct-v0.3', 'judged': 247, 'unparsed': 0, 'contentless_scored_wrong': 44, 'prompt_version': 2}
+[   9.8 min] test_base_selfconsistency.json: {'model': 'openai-compatible:mistralai/Mistral-7B-Instruct-v0.3', 'judged': 623, 'unparsed': 0, 'contentless_scored_wrong': 101, 'prompt_version': 2}
+[  10.1 min] test_sft_dpo_gate_seed0.json: {'model': 'openai-compatible:mistralai/Mistral-7B-Instruct-v0.3', 'judged': 175, 'unparsed': 0, 'contentless_scored_wrong': 0, 'prompt_version': 2}
+[  10.1 min] test_sft_dpo_gate_seed1.json: {'model': 'openai-compatible:mistralai/Mistral-7B-Instruct-v0.3', 'judged': 0, 'unparsed': 0, 'contentless_scored_wrong': 0, 'prompt_version': 2}
+[  10.3 min] test_sft_dpo_gate_seed2.json: {'model': 'openai-compatible:mistralai/Mistral-7B-Instruct-v0.3', 'judged': 125, 'unparsed': 0, 'contentless_scored_wrong': 0, 'prompt_version': 2}
+[  10.7 min] test_sft_dpo_seed0.json: {'model': 'openai-compatible:mistralai/Mistral-7B-Instruct-v0.3', 'judged': 265, 'unparsed': 0, 'contentless_scored_wrong': 19, 'prompt_version': 2}
+[  11.2 min] test_sft_dpo_seed1.json: {'model': 'openai-compatible:mistralai/Mistral-7B-Instruct-v0.3', 'judged': 269, 'unparsed': 0, 'contentless_scored_wrong': 66, 'prompt_version': 2}
+[  11.6 min] test_sft_dpo_seed2.json: {'model': 'openai-compatible:mistralai/Mistral-7B-Instruct-v0.3', 'judged': 259, 'unparsed': 0, 'contentless_scored_wrong': 38, 'prompt_version': 2}
+[  12.0 min] test_sft_seed0.json: {'model': 'openai-compatible:mistralai/Mistral-7B-Instruct-v0.3', 'judged': 253, 'unparsed': 0, 'contentless_scored_wrong': 19, 'prompt_version': 2}
+[  12.4 min] test_sft_seed1.json: {'model': 'openai-compatible:mistralai/Mistral-7B-Instruct-v0.3', 'judged': 252, 'unparsed': 0, 'contentless_scored_wrong': 63, 'prompt_version': 2}
+[  12.8 min] test_sft_seed2.json: {'model': 'openai-compatible:mistralai/Mistral-7B-Instruct-v0.3', 'judged': 244, 'unparsed': 0, 'contentless_scored_wrong': 38, 'prompt_version': 2}
+[  12.8 min] finished

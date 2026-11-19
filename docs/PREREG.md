@@ -137,4 +137,13 @@ All arms use the same retrieval, prompt (except arm 2) and verifier. Arms 1–4 
 - **The base arms' 3 seed slots repeat the same 2 runs**, as in version 9. Point estimates are unaffected.
 - **DPO pairs are unbalanced:** 15 type-A against 136 type-B.
 - **No transfer corpus, and no MiniLM check** (see Deviations).
-- **The judge-scored version is reported next to this one** when it finishes.
+- **The judge-scored version is reported next to this one** (below).
+
+**Judge check** (cross-family judge with the citation-only rule; `docs/evidence/run_v10/report_common_judge.json`): the verdict is also **neither**.
+- **Replace?** +0.045 [−0.000, +0.088]. The interval just reaches 0.
+- **Complement?**
+  - SFT → DPO + gate vs SFT → DPO: −0.069 [−0.171, +0.029];
+  - vs base + gate: +0.040 [−0.013, +0.086].
+- **Where the two scorers disagree:** under the judge, SFT → DPO **beats both confidence baselines**: log-probability +0.059 [+0.009, +0.103] and self-consistency +0.055 [+0.007, +0.102]. Under the token scorer, both comparisons are ties.
+- **Which one stands:** the token scorer is the pre-registered primary metric, so the result is: training ties the gate and the cheap baselines, and the judge check suggests a small edge over the baselines only.
+- **The judge has a known failure here:** it credits partial answers when they are truncated (gatedrag `docs/MEASURING_RUN.md` §7). No arm here is length-capped, but the disagreement is reported rather than resolved.
