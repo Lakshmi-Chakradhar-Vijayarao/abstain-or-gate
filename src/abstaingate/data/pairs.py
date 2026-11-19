@@ -21,6 +21,7 @@ The test split is never read here; `build` refuses any item id that is in the te
 from __future__ import annotations
 
 import json
+import re
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -32,6 +33,14 @@ class Built:
     sft: list[dict]
     pairs: list[dict]
     counts: dict
+
+
+def has_content(text: str) -> bool:
+    """False for an answer that is only citation markers and punctuation ("[1]"). The judge grades most
+    of these CORRECT (19 Nov 2026: 53 of 66 in the dev pool), and "shortest correct answer" then picks
+    them, so 13 of 55 SFT answer targets were a bare "[1]". Such answers are never a correct target;
+    they stay available as rejected (wrong, shipped) answers."""
+    return re.search(r"[A-Za-z0-9]", re.sub(r"\[\d+\]", "", text)) is not None
 
 
 def _is_abstain(text: str) -> bool:
@@ -71,7 +80,7 @@ def build(pool: dict, items: list[dict], prompt_for, test_ids: set[str] | frozen
         shipped = [rec["answer"] for _, rec in samples if not _is_abstain(rec["answer"])]
         if it.get("answerable"):
             correct = sorted({rec["answer"] for sc, rec in samples if sc.get(label, sc["correct"]) == 1.0
-                              and not _is_abstain(rec["answer"])}, key=len)
+                              and not _is_abstain(rec["answer"]) and has_content(rec["answer"])}, key=len)
             if correct:
                 sft.append({"prompt": prompt, "completion": correct[0], **meta})
                 for ans in correct[:max_pairs_per_item]:

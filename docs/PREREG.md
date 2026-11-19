@@ -83,3 +83,11 @@ All arms use the same retrieval, prompt (except arm 2) and verifier. Arms 1–4 
 
 - 18 Nov 2026: base model 3B rather than Project 1's served model (see Design).
 - 18 Nov 2026, before any run: the primary comparison was changed from "AURC, arm 4 vs the deployed gate" to "selective accuracy at matched coverage". In the design dry run, the deployed gate's coverage, and so its AURC as then defined, was set by its threshold, not by its ranking. AURC is now the standard definition and is reported only for arms with their own ranking.
+- **19 Nov 2026, after the real run (kernel version 9), labelling bug found: citation-only training targets.**
+  - **What happened:** the judge graded 53 of 66 citation-only dev answers (e.g. "[1]") correct. "Shortest correct answer" then made a bare "[1]" the SFT target for 13 of 55 answerable items, and the chosen side of their type-B pairs.
+  - **Effect:** the trained models answer with a bare citation far more often (25–26% of test answers vs 9% for base).
+  - **Version 9 still counts.** Its pre-registered verdict ("neither") is reported as the result of the protocol as written, with this bug named as its cause.
+  - **Corrected re-run (version 10).** The only changes are:
+    - citation-only answers are never correct targets (`pairs.has_content`);
+    - the judge scores them wrong without a model call.
+  - **Version 10 is reported beside version 9, not instead of it.** No other setting changes, and the decision language is unchanged.

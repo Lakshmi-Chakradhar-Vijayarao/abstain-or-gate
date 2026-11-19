@@ -179,3 +179,14 @@ def test_consistency_scores():
                         [{"answer": "4222 port"}, {"answer": "maybe so"}]]}
     c = selective.consistency_scores(pool)
     assert c["q1"] == 1.0 and c["q2"] < 0.5
+
+
+def test_citation_only_answers_are_never_correct_targets():
+    pool = _pool([[("a1", 0.0, "[1]"), ("a2", 0.0, "wrong"), ("u1", 0.0, "made up")],
+                  [("a1", 0.0, "[1] it listens on 4222"), ("a2", 0.0, "wrong"), ("u1", 0.0, "invented")]])
+    for run in pool["runs"]:                      # a lenient judge credits the bare citation too
+        run[0]["correct_judge"] = 1.0
+    built = build(pool, ITEMS, _prompt, label="correct_judge", max_pairs_per_item=3)
+    targets = [r["completion"] for r in built.sft if r["item"] == "a1"]
+    assert targets == ["[1] it listens on 4222"]
+    assert all(p["chosen"] != "[1]" for p in built.pairs)
