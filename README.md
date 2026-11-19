@@ -62,6 +62,7 @@ Type B pairs are what stop DPO from simply learning to refuse more. Over-abstent
 ```bash
 make install && make test
 make dryrun          # whole pipeline on a laptop: fake generator + tiny model; checks wiring, produces no result
+                     # (needs gatedrag cloned at ../gated-llm-service; builds its chunks on first run, which fetches the NATS docs)
 # on Kaggle (T4): scripts/kaggle/run_project2.py with the gatedrag bundle and the frozen golden split attached
 ```
 

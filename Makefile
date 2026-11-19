@@ -7,7 +7,11 @@ test:
 	PYTHONPATH=src $(PY) -m pytest -q
 lint:
 	$(PY) -m ruff check src tests scripts && $(PY) -m mypy src
-dryrun:         ## end-to-end on a laptop (fake generator, tiny model): wiring only, not a result
+CHUNKS := $(GATEDRAG)/data/processed/chunks.jsonl
+$(CHUNKS):      ## gatedrag's chunked corpus, built on first use (fetches the pinned NATS docs)
+	$(MAKE) -C $(GATEDRAG) ingest PY=$(abspath $(PY))
+
+dryrun: $(CHUNKS)   ## end-to-end on a laptop (fake generator, tiny model): wiring only, not a result
 	rm -rf data/interim/dry && mkdir -p data/interim/dry/in
 	GATEDRAG_DRYRUN=1 P2_INPUT=data/interim/dry/in P2_OUT=data/interim/dry/out P2_GATEDRAG=$(GATEDRAG) P2_SELF=. \
 	  P2_GOLDEN=$(GATEDRAG)/data/golden/pilot_frozen $(PY) scripts/kaggle/run_project2.py
