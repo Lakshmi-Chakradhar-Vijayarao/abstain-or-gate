@@ -1,0 +1,159 @@
+import pytest
+
+from abstaingate.data.pairs import ABSTAIN, build
+from abstaingate.evaluation import contamination, selective
+
+
+def _pool(rows_per_run, router="open_loop"):
+    ids = sorted({i for run in rows_per_run for i, *_ in run})
+    runs, recs = [], []
+    for run in rows_per_run:
+        d = {i: (c, a) for i, c, a in run}
+        runs.append([{"correct": d[i][0]} for i in ids])
+        recs.append([{"answer": d[i][1], "retrieved": ["c1"]} for i in ids])
+    return {"meta": {"config": {"router": router}, "item_ids": ids}, "runs": runs, "records": recs}
+
+
+ITEMS = [{"id": "a1", "question": "q1", "answerable": True, "gold_docs": ["d1"]},
+         {"id": "a2", "question": "q2", "answerable": True, "gold_docs": ["d2"]},
+         {"id": "u1", "question": "q3", "answerable": False}]
+
+
+def _prompt(item, retrieved):
+    return [{"role": "user", "content": item["question"]}]
+
+
+def test_pair_types_follow_the_rules():
+    pool = _pool([[("a1", 1.0, "right"), ("a2", 0.0, "wrong2"), ("u1", 0.0, "made up")],
+                  [("a1", 0.0, "nope"), ("a2", 0.0, ABSTAIN), ("u1", 1.0, ABSTAIN)]])
+    b = build(pool, ITEMS, _prompt)
+    by = {(p["item"], p["type"]): p for p in b.pairs}
+    assert by[("a1", "B")]["chosen"] == "right" and by[("a1", "B")]["rejected"] == ABSTAIN
+    assert by[("a2", "A")]["chosen"] == ABSTAIN and by[("a2", "A")]["rejected"] == "wrong2"
+    assert by[("u1", "A")]["rejected"] == "made up"
+    sft = {s["item"]: s["completion"] for s in b.sft}
+    assert sft == {"a1": "right", "a2": ABSTAIN, "u1": ABSTAIN}
+    assert b.counts["pair_A"] == 2 and b.counts["pair_B"] == 1
+
+
+def test_builder_refuses_test_items_and_gated_pools():
+    pool = _pool([[("a1", 1.0, "right"), ("a2", 0.0, "x"), ("u1", 1.0, ABSTAIN)]])
+    with pytest.raises(ValueError, match="test-split"):
+        build(pool, ITEMS, _prompt, test_ids={"a2"})
+    with pytest.raises(ValueError, match="open-loop"):
+        build(_pool([[("a1", 1.0, "r"), ("a2", 1.0, "r"), ("u1", 1.0, ABSTAIN)]], router="cost"), ITEMS, _prompt)
+
+
+def _rows(spec, answerable=True):
+    return [{"item": f"i{k}", "cluster": f"d{k // 2}", "answered": a, "correct": c, "conf": f, "answerable": answerable}
+            for k, (a, c, f) in enumerate(spec)]
+
+
+def test_standard_aurc_ranks_answered_items():
+    good = _rows([(True, 1.0, 0.9), (True, 1.0, 0.8), (True, 0.0, 0.1), (False, 0.0, 0.0)])
+    bad = _rows([(True, 0.0, 0.9), (True, 1.0, 0.8), (True, 1.0, 0.1), (False, 0.0, 0.0)])
+    assert selective.aurc(good) < selective.aurc(bad)
+    assert selective.aurc(good) == pytest.approx((0 + 0 + 1 / 3) / 3)
+
+
+def test_gate_threshold_does_not_change_aurc_of_the_ranking():
+    """The confound the review caught: a gate must not win or lose AURC by where its threshold sits."""
+    import numpy as np
+    rng = np.random.default_rng(0)
+    conf = rng.uniform(0, 1, 200)
+    rows = _rows([(True, float(rng.uniform() < c), c) for c in conf])
+    a, b = selective.gate(rows, 0.2), selective.gate(rows, 0.6)
+    assert selective.coverage(a) > selective.coverage(b)
+    # a gate is a cut of the SAME ranking: gating at the threshold for coverage c gives exactly the
+    # selective accuracy of the ungated ranking cut at c, so the threshold carries no extra information
+    for c in (0.3, 0.5, 0.7):
+        thr = selective.threshold_for_coverage(rows, c)
+        assert selective.selective_accuracy(selective.gate(rows, thr)) == pytest.approx(
+            selective.selective_accuracy_at(rows, selective.coverage(selective.gate(rows, thr))))
+    # tightening the gate raises selective accuracy, which is why arms are compared at matched coverage
+    assert selective.selective_accuracy(b) > selective.selective_accuracy(a)
+
+
+def test_threshold_for_coverage_matches_target_on_dev():
+    rows = _rows([(True, 1.0, c / 100) for c in range(100)])
+    thr = selective.threshold_for_coverage(rows, 0.3)
+    assert selective.coverage(selective.gate(rows, thr)) == pytest.approx(0.3, abs=0.011)
+    assert selective.threshold_for_coverage(rows[:10] + _rows([(False, 0.0, 0.0)] * 90), 0.5) == float("-inf")
+
+
+def test_gated_out_items_score_like_abstentions():
+    rows = _rows([(True, 0.0, 0.1)], answerable=False) + _rows([(True, 1.0, 0.1)])
+    g = selective.gate(rows, 0.5)
+    assert [r["answered"] for r in g] == [False, False] and [r["correct"] for r in g] == [1.0, 0.0]
+
+
+def test_cost_per_question():
+    rows = _rows([(True, 1.0, 0.9), (True, 0.0, 0.8), (False, 0.0, 0.0), (False, 0.0, 0.0)])
+    assert selective.cost_per_question(rows, 4.0, 1.0) == pytest.approx((0 + 4 + 1 + 1) / 4)
+
+
+def test_paired_bootstrap_identical_arms_give_zero():
+    rows = _rows([(True, 1.0, 0.9), (True, 0.0, 0.5), (False, 0.0, 0.0), (True, 1.0, 0.7)] * 5)
+    out = selective.paired_cluster_bootstrap(rows, rows, n_boot=200)
+    assert out["diff"] == 0 and out["ci"] == [0.0, 0.0]
+
+
+def test_contamination_flags_copies():
+    rep = contamination.report(["how do i set the max payload size in the nats server config file today"],
+                               ["how do i set the max payload size in the nats server config file today",
+                                "completely different question about retention policies for streams"])
+    assert rep["exact_duplicates"] == 1 and rep["ngram_flagged"] == 1 and rep["ngram_max"] == 1.0
+
+
+def test_analysis_on_synthetic_pools(tmp_path):
+    import json
+
+    import numpy as np
+
+    from abstaingate.evaluation.analysis import analyse, render
+    rng = np.random.default_rng(1)
+
+    def pool(n, p_answer, p_correct_shift):
+        ids = [f"q{i}" for i in range(n)]
+        runs = []
+        for _ in range(2):
+            run = []
+            for _i in range(n):
+                sup = float(rng.uniform())
+                ans = rng.uniform() < p_answer
+                run.append({"abstained": 0.0 if ans else 1.0, "support": sup, "answerable": 1.0,
+                            "correct": float(ans and rng.uniform() < min(1, sup + p_correct_shift))})
+            runs.append(run)
+        return {"meta": {"item_ids": ids, "item_clusters": [f"d{i // 4}" for i in range(n)]}, "runs": runs}
+
+    (tmp_path / "dev_base_openloop.json").write_text(json.dumps(pool(40, 0.95, 0.0)))
+    for s in range(2):
+        (tmp_path / f"dev_sft_dpo_openloop_seed{s}.json").write_text(json.dumps(pool(40, 0.6, 0.2)))
+        for name, pa, sh in (("test_base", 0.95, 0.0), ("test_sft_dpo", 0.6, 0.2), ("test_base_gate", 0.3, 0.1),
+                             ("test_sft_dpo_gate", 0.3, 0.3)):
+            (tmp_path / f"{name}_seed{s}.json").write_text(json.dumps(pool(40, pa, sh)))
+    res = analyse(tmp_path, n_boot=100)
+    assert "base_gate_matched" in res["table"]
+    assert res["table"]["base_gate_matched"]["aurc"] is None          # a gated arm has no ranking of its own
+    assert abs(res["table"]["base_gate_matched"]["coverage"] - res["table"]["sft_dpo"]["coverage"]) < 0.15
+    assert res["verdict"]["summary"] in ("replace", "complement", "replace and complement", "neither")
+    assert "Verdict" in render(res)
+
+
+def test_merged_model_keeps_the_source_config(tmp_path):
+    import json
+
+    from abstaingate.models.train import keep_source_config
+    src = tmp_path / "base"
+    src.mkdir()
+    (src / "config.json").write_text(json.dumps({"model_type": "qwen2", "rope_theta": 1000000.0}))
+    out = tmp_path / "merged"
+    out.mkdir()
+    (out / "config.json").write_text(json.dumps({"model_type": "qwen2", "rope_parameters": {"rope_theta": 1e6}}))
+    (src / "tokenizer_config.json").write_text(json.dumps({"extra_special_tokens": {}, "chat_template": "x"}))
+    (out / "tokenizer_config.json").write_text(json.dumps({"extra_special_tokens": []}))
+    (out / "chat_template.jinja").write_text("x")
+    keep_source_config(str(src), out)
+    assert json.loads((out / "config.json").read_text())["rope_theta"] == 1000000.0
+    assert json.loads((out / "tokenizer_config.json").read_text())["extra_special_tokens"] == {}
+    assert not (out / "chat_template.jinja").exists()
