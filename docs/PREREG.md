@@ -147,3 +147,8 @@ All arms use the same retrieval, prompt (except arm 2) and verifier. Arms 1–4 
 - **Where the two scorers disagree:** under the judge, SFT → DPO **beats both confidence baselines**: log-probability +0.059 [+0.009, +0.103] and self-consistency +0.055 [+0.007, +0.102]. Under the token scorer, both comparisons are ties.
 - **Which one stands:** the token scorer is the pre-registered primary metric, so the result is: training ties the gate and the cheap baselines, and the judge check suggests a small edge over the baselines only.
 - **The judge has a known failure here:** it credits partial answers when they are truncated (gatedrag `docs/MEASURING_RUN.md` §7). No arm here is length-capped, but the disagreement is reported rather than resolved.
+
+**Judge reliability for the pair labels (20 Nov 2026, as required above).** On gatedrag's wrong-enriched human batch 3, the judge caught only 4 of 16 wrong answers, crediting 12 [0.50, 0.90]. It also credited 54 of 72 bare-citation answers before the rule, and 51 of 63 truncated partial answers.
+- **Bias in the type-B pairs:** a sizeable share of their "correct" chosen answers may be wrong.
+- **Bias in the SFT targets:** the same applies to the answer targets.
+- **Effect on the result:** if anything, this biases training toward answering, and that is consistent with the trained arms' higher coverage.
