@@ -37,8 +37,8 @@ class Built:
 
 def has_content(text: str) -> bool:
     """False for an answer that is only citation markers and punctuation ("[1]"). The judge grades most
-    of these CORRECT (19 Nov 2026: 53 of 66 in the dev pool), and "shortest correct answer" then picks
-    them, so 13 of 55 SFT answer targets were a bare "[1]". Such answers are never a correct target;
+    of these CORRECT (19 Nov 2026: 54 of 72 in the dev pool), and "shortest correct answer" then picks
+    them, so 14 of 55 SFT answer targets were a bare citation. Such answers are never a correct target;
     they stay available as rejected (wrong, shipped) answers."""
     return re.search(r"[A-Za-z0-9]", re.sub(r"\[\d+\]", "", text)) is not None
 
