@@ -8,6 +8,13 @@ Pools on disk (from scripts/kaggle/run_project2.py), per seed s:
 Arm 5 ("base + gate at equal coverage") is derived, not run: the base model's test answers, gated
 by a support threshold chosen on DEV so the gate answers as often as SFT -> DPO does on dev.
 
+Common coverage (deviation of 19 Nov 2026, fixed before kernel version 10's results were seen): a
+gate can only remove answers. When SFT -> DPO answers MORE often than the base model on dev, the base
+arm cannot be gated up to it (the old code then set the threshold to -inf and compared ungated arms).
+Both arms are therefore compared at the common coverage c = min(dev coverage of each): whichever arm
+answers more is gated down to c by a threshold on its own dev support, the other is left as is.
+`sft_dpo_matched` is SFT -> DPO at c; the base, log-prob and self-consistency arms are cut to c too.
+
   replace?     selective accuracy, arm 4 (SFT -> DPO) vs arm 5, at that matched coverage
   complement?  cost per question at the stated costs, arm 6 (SFT -> DPO + deployed gate) vs
                arm 4 and vs arm 5c (base + deployed gate)
@@ -61,11 +68,16 @@ def analyse(pool_dir: str | Path, n_boot: int = 2000) -> dict:
                 arms.setdefault(arm, []).extend(_runs(p))
         dev_dpo = _flat(_load(d / f"dev_sft_dpo_openloop_seed{s}.json"))
         base = _load(d / f"test_base_seed{s}.json")
-        if dev_base and dev_dpo and base:
-            target = coverage(dev_dpo)
+        dpo = _load(d / f"test_sft_dpo_seed{s}.json")
+        if dev_base and dev_dpo and base and dpo:
+            target = min(coverage(dev_dpo), coverage(dev_base))     # common coverage (see module docstring)
             thr = threshold_for_coverage(dev_base, target)
-            thresholds[s] = {"dev_coverage_target": target, "support_threshold": thr}
+            t_dpo = threshold_for_coverage(dev_dpo, target)
+            thresholds[s] = {"dev_coverage_target": target, "support_threshold": thr,
+                             "sft_dpo_support_threshold": t_dpo,
+                             "dev_coverage_base": coverage(dev_base), "dev_coverage_sft_dpo": coverage(dev_dpo)}
             arms.setdefault("base_gate_matched", []).extend(gate(rows, thr) for rows in _runs(base))
+            arms.setdefault("sft_dpo_matched", []).extend(gate(rows, t_dpo) for rows in _runs(dpo))
             # confidence baselines at the same matched coverage: the cheap alternatives training must beat
             dev_pool = _load(d / "dev_base_openloop.json")
             if dev_pool and "records" in base:
@@ -104,9 +116,9 @@ def analyse(pool_dir: str | Path, n_boot: int = 2000) -> dict:
         fb = [{**r, "item": f"{k}:{r['item']}"} for k, rs in enumerate(arms[b][:n]) for r in rs]
         return paired_cluster_bootstrap(fa, fb, stat=stat, n_boot=n_boot)
 
-    replace = compare("sft_dpo", "base_gate_matched", selective_accuracy)
-    vs_logprob = compare("sft_dpo", "base_logprob_matched", selective_accuracy)
-    vs_consistency = compare("sft_dpo", "base_consistency_matched", selective_accuracy)
+    replace = compare("sft_dpo_matched", "base_gate_matched", selective_accuracy)
+    vs_logprob = compare("sft_dpo_matched", "base_logprob_matched", selective_accuracy)
+    vs_consistency = compare("sft_dpo_matched", "base_consistency_matched", selective_accuracy)
     c64 = compare("sft_dpo_gate_deployed", "sft_dpo", cost_per_question)
     c65 = compare("sft_dpo_gate_deployed", "base_gate_deployed", cost_per_question)
     verdict: dict = {
@@ -131,7 +143,7 @@ def render(res: dict) -> str:
         lines.append(f"| {arm} | {row['n_runs']} | " + " | ".join(cells) + " |")
     r = res["replace_selacc_sft_dpo_vs_matched_gate"]
     if r:
-        lines += ["", f"Replace? Selective accuracy, SFT→DPO − (base + gate at matched coverage) = {r['diff']:+.4f}, "
+        lines += ["", f"Replace? Selective accuracy at common coverage, SFT→DPO − (base + gate) = {r['diff']:+.4f}, "
                       f"95% CI [{r['ci'][0]:+.4f}, {r['ci'][1]:+.4f}] ({r['n_clusters']} documents)."]
     for key, label in (("complement_cost_vs_sft_dpo", "vs SFT→DPO"), ("complement_cost_vs_base_gate", "vs base + gate")):
         c = res[key]

@@ -190,3 +190,32 @@ def test_citation_only_answers_are_never_correct_targets():
     targets = [r["completion"] for r in built.sft if r["item"] == "a1"]
     assert targets == ["[1] it listens on 4222"]
     assert all(p["chosen"] != "[1]" for p in built.pairs)
+
+
+def test_common_coverage_when_the_trained_arm_answers_more(tmp_path):
+    """The gate can only remove answers: if SFT -> DPO answers more than base, SFT -> DPO is cut down to
+    base's coverage instead of comparing two ungated arms."""
+    import json
+
+    import numpy as np
+
+    from abstaingate.evaluation.analysis import analyse
+    rng = np.random.default_rng(2)
+
+    def pool(n, p_answer):
+        runs = [[{"abstained": 0.0 if rng.uniform() < p_answer else 1.0, "support": float(rng.uniform()),
+                  "answerable": 1.0, "correct": float(rng.uniform() < 0.6)} for _ in range(n)] for _ in range(2)]
+        return {"meta": {"item_ids": [f"q{i}" for i in range(n)], "item_clusters": [f"d{i // 4}" for i in range(n)]},
+                "runs": runs}
+
+    (tmp_path / "dev_base_openloop.json").write_text(json.dumps(pool(80, 0.5)))
+    (tmp_path / "dev_sft_dpo_openloop_seed0.json").write_text(json.dumps(pool(80, 0.9)))
+    for name, pa in (("test_base", 0.5), ("test_sft_dpo", 0.9), ("test_base_gate", 0.3), ("test_sft_dpo_gate", 0.3)):
+        (tmp_path / f"{name}_seed0.json").write_text(json.dumps(pool(80, pa)))
+    res = analyse(tmp_path, n_boot=50)
+    thr = res["thresholds"][0]
+    assert thr["support_threshold"] == float("-inf")           # base is not gated: it already answers less
+    assert thr["sft_dpo_support_threshold"] > float("-inf")    # the trained arm is cut down instead
+    t = res["table"]
+    assert abs(t["sft_dpo_matched"]["coverage"] - t["base_gate_matched"]["coverage"]) < 0.12
+    assert t["sft_dpo_matched"]["coverage"] < t["sft_dpo"]["coverage"] - 0.2

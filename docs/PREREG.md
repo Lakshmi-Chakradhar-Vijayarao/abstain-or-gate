@@ -91,3 +91,14 @@ All arms use the same retrieval, prompt (except arm 2) and verifier. Arms 1–4 
     - citation-only answers are never correct targets (`pairs.has_content`);
     - the judge scores them wrong without a model call.
   - **Version 10 is reported beside version 9, not instead of it.** No other setting changes, and the decision language is unchanged.
+- **19 Nov 2026, before kernel version 10's results were seen: the comparison is made at the common coverage.**
+  - **Why:** a gate can only remove answers. In version 9, SFT → DPO answered more often on dev than base did on 2 of 3 seeds (dev coverage targets 0.649 and 0.644). Arm 5's threshold therefore became −∞, and "base + gate at matched coverage" was just the ungated base arm.
+  - **Now:** both arms are compared at c = min(dev coverage of SFT → DPO, dev coverage of base). Whichever arm answers more is cut to c by a threshold on its own dev support; the other is unchanged. The same applies to arms 7 and 8. The decision language is unchanged, with "matched coverage" read as this common coverage.
+  - **Version 9's comparisons are void** under either reading: on those 2 seeds they compared ungated arms.
+- **Recorded after the fact (19 Nov 2026, found by an audit, not declared before the real run):**
+  - **No transfer corpus was run.** The held-out documentation corpus was never chosen. Transfer is not reported.
+  - **No MiniLM cosine.** The contamination report has only the 8-gram fields.
+  - **No per-step DPO log.** Addition 4 promised chosen/rejected log-probabilities per step. The trainer logged one entry per seed, over 10 steps, so the displacement trajectory cannot be assessed; only end-of-training rewards are reported.
+- **Known issues reported with every result:**
+  - **The same question appears across the split under two roles.** Two security questions, `sec-005`/`sec-003` and `sec-001`/`sec-004`, appear in dev and test under different roles with opposite answerability. The splits are by document, so the frozen split is kept. The pair is reported as a memorisation-leak probe; future splits will deduplicate by question text.
+  - **The pairs are unbalanced.** With judge labels, version 9 had 10 type-A against 144 type-B pairs. DPO therefore mostly teaches "answer rather than abstain". This is stated next to any DPO result, and the arms' coverage is read with it.
