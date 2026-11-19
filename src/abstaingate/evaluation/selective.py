@@ -119,9 +119,46 @@ def paired_cluster_bootstrap(rows_a: list[dict], rows_b: list[dict], stat=aurc, 
     return {"diff": point, "ci": [float(lo), float(hi)], "n_clusters": len(keys), "n_boot": len(diffs)}
 
 
-def rows_from_pool(pool: dict, run: int = 0) -> list[dict]:
-    """One row per item from one run of a gatedrag pool."""
+def rows_from_pool(pool: dict, run: int = 0, conf: str = "support", consistency: dict | None = None) -> list[dict]:
+    """One row per item from one run of a gatedrag pool. `conf` picks the ranking score:
+      support      gatedrag's verifier support (the gate's score)
+      logprob      the answer's mean token log-probability (a model-confidence baseline)
+      consistency  agreement among K sampled answers to the item (`consistency` maps item -> score)"""
     ids, clusters = pool["meta"]["item_ids"], pool["meta"]["item_clusters"]
-    return [{"item": i, "cluster": c, "answered": sc["abstained"] == 0.0, "correct": sc["correct"],
-             "conf": sc["support"], "answerable": sc["answerable"] == 1.0}
-            for i, c, sc in zip(ids, clusters, pool["runs"][run], strict=True)]
+    recs = pool.get("records", [[{}] * len(ids)] * len(pool["runs"]))[run]
+    rows = []
+    for i, c, sc, rec in zip(ids, clusters, pool["runs"][run], recs, strict=True):
+        if conf == "support":
+            score = sc["support"]
+        elif conf == "logprob":
+            lp = rec.get("mean_logprob")
+            score = float("-inf") if lp is None else float(lp)
+        else:
+            score = (consistency or {}).get(i, 0.0)
+        rows.append({"item": i, "cluster": c, "answered": sc["abstained"] == 0.0, "correct": sc["correct"],
+                     "conf": score, "answerable": sc["answerable"] == 1.0})
+    return rows
+
+
+def consistency_scores(pool: dict, min_overlap: float = 0.6) -> dict[str, float]:
+    """Self-consistency per item: the share of the item's K sampled answers that agree with the most
+    common one (agreement = token overlap >= min_overlap, both ways). Abstentions count as their own answer."""
+    import re as _re
+
+    def toks(t: str) -> set[str]:
+        return set(_re.findall(r"[a-z0-9]+", t.lower()))
+
+    def agree(a: str, b: str) -> bool:
+        ta, tb = toks(a), toks(b)
+        if not ta or not tb:
+            return ta == tb
+        inter = len(ta & tb)
+        return inter / len(ta) >= min_overlap and inter / len(tb) >= min_overlap
+
+    out = {}
+    ids = pool["meta"]["item_ids"]
+    for j, item in enumerate(ids):
+        answers = [run[j]["answer"] for run in pool["records"]]
+        best = max(sum(agree(a, b) for b in answers) for a in answers)
+        out[item] = best / len(answers)
+    return out

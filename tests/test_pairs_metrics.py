@@ -157,3 +157,25 @@ def test_merged_model_keeps_the_source_config(tmp_path):
     assert json.loads((out / "config.json").read_text())["rope_theta"] == 1000000.0
     assert json.loads((out / "tokenizer_config.json").read_text())["extra_special_tokens"] == {}
     assert not (out / "chat_template.jinja").exists()
+
+
+def test_judge_labels_and_several_pairs_per_item():
+    pool = _pool([[("a1", 0.0, "the port is 4222"), ("a2", 0.0, "wrong one"), ("u1", 0.0, "made up")],
+                  [("a1", 0.0, "it listens on 4222 by default"), ("a2", 0.0, "wrong two"), ("u1", 0.0, "invented")]])
+    for run in pool["runs"]:                      # the judge says a1's answers are right despite the token scorer
+        run[0]["correct_judge"] = 1.0
+        run[1]["correct_judge"] = 0.0
+        run[2]["correct_judge"] = 0.0
+    token = build(pool, ITEMS, _prompt)
+    judge = build(pool, ITEMS, _prompt, label="correct_judge", max_pairs_per_item=3)
+    assert ("a1", "A") in {(p["item"], p["type"]) for p in token.pairs}      # token labels: a wrong "abstain" pair
+    assert ("a1", "A") not in {(p["item"], p["type"]) for p in judge.pairs}  # judge labels fix it
+    assert judge.counts["pair_B"] == 2 and judge.counts["pair_A"] == 4      # two answers per item used
+
+
+def test_consistency_scores():
+    pool = {"meta": {"item_ids": ["q1", "q2"]},
+            "records": [[{"answer": "port 4222"}, {"answer": "yes"}], [{"answer": "port 4222 default"}, {"answer": "no idea at all"}],
+                        [{"answer": "4222 port"}, {"answer": "maybe so"}]]}
+    c = selective.consistency_scores(pool)
+    assert c["q1"] == 1.0 and c["q2"] < 0.5

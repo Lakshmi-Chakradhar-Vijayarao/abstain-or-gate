@@ -61,6 +61,19 @@ All arms use the same retrieval, prompt (except arm 2) and verifier. Arms 1–4 
 - **Complement:** arm 6's cost per question is lower than both arm 4's and arm 5c's, and both CIs exclude 0.
 - **Both, either, or neither** are reported as such. Over-abstention is printed next to every verdict, so a "win" bought by refusing more is visible.
 
+## Additions before the real run (19 Nov 2026, after an external review; no real-run data seen)
+
+1. **Confidence-baseline arms**, at the same matched coverage as arm 5:
+   - **arm 7: log-probability gate.** The base model's answers are ranked by mean token log-probability, with the threshold set on dev.
+   - **arm 8: self-consistency gate.** The base model's answers are ranked by how many of 5 sampled answers agree with the most common one, with the threshold set on dev.
+
+   SFT → DPO is compared with each, by selective accuracy and the same clustered paired bootstrap. If training cannot beat these cheap baselines, that is the result.
+2. **Pair labels from the judge.** Correctness for building SFT data and preference pairs comes from the cross-family judge (Mistral-7B), not the token scorer. In gatedrag's human audit, the token scorer penalised correct paraphrases, which would turn answerable questions into "abstain" pairs.
+3. **More pairs.** 8 sampled answers per dev item, and up to 3 distinct pairs per item and type. The pilot had only 38 type-B pairs.
+4. **Secondary question: what does abstention DPO teach?**
+   - The DPO log history (the chosen and rejected log-probabilities per step) is kept for every seed.
+   - **Likelihood displacement**, where both fall, is reported next to over-abstention on answerable items. Together they distinguish a calibration gain from a learned refusal style.
+
 ## Deviations
 
 - 18 Nov 2026: base model 3B rather than Project 1's served model (see Design).

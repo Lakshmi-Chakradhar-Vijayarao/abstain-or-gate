@@ -21,6 +21,7 @@ from pathlib import Path
 import numpy as np
 
 from abstaingate.evaluation.selective import (
+    consistency_scores,
     cost_per_question,
     coverage,
     gate,
@@ -65,6 +66,23 @@ def analyse(pool_dir: str | Path, n_boot: int = 2000) -> dict:
             thr = threshold_for_coverage(dev_base, target)
             thresholds[s] = {"dev_coverage_target": target, "support_threshold": thr}
             arms.setdefault("base_gate_matched", []).extend(gate(rows, thr) for rows in _runs(base))
+            # confidence baselines at the same matched coverage: the cheap alternatives training must beat
+            dev_pool = _load(d / "dev_base_openloop.json")
+            if dev_pool and "records" in base:
+                lp_dev = [r for k in range(len(dev_pool["runs"])) for r in rows_from_pool(dev_pool, k, "logprob")]
+                if any(r["conf"] != float("-inf") for r in lp_dev):
+                    t_lp = threshold_for_coverage(lp_dev, target)
+                    thresholds[s]["logprob_threshold"] = t_lp
+                    arms.setdefault("base_logprob_matched", []).extend(
+                        gate(rows_from_pool(base, k, "logprob"), t_lp) for k in range(len(base["runs"])))
+                sc_test = _load(d / "test_base_selfconsistency.json")
+                if sc_test and len(dev_pool.get("records", [])) >= 3:
+                    c_dev, c_test = consistency_scores(dev_pool), consistency_scores(sc_test)
+                    cd = [r for k in range(len(dev_pool["runs"])) for r in rows_from_pool(dev_pool, k, "consistency", c_dev)]
+                    t_c = threshold_for_coverage(cd, target)
+                    thresholds[s]["consistency_threshold"] = t_c
+                    arms.setdefault("base_consistency_matched", []).extend(
+                        gate(rows_from_pool(base, k, "consistency", c_test), t_c) for k in range(len(base["runs"])))
 
     keys = ["coverage", "selective_accuracy", "aurc", "cost_per_question", "sel_acc@70%", "sel_acc@80%",
             "sel_acc@90%", "over_abstention", "accuracy_answerable"]
@@ -75,7 +93,7 @@ def analyse(pool_dir: str | Path, n_boot: int = 2000) -> dict:
 
     table = {arm: {"n_runs": len(rs), **{k: pooled(rs, k) for k in keys}} for arm, rs in arms.items()}
     for arm in table:            # a gated arm truncates another arm's ranking: AURC belongs to that arm
-        if "gate" in arm:
+        if "gate" in arm or arm.endswith("_matched"):
             table[arm]["aurc"] = None
 
     def compare(a: str, b: str, stat) -> dict | None:
@@ -87,6 +105,8 @@ def analyse(pool_dir: str | Path, n_boot: int = 2000) -> dict:
         return paired_cluster_bootstrap(fa, fb, stat=stat, n_boot=n_boot)
 
     replace = compare("sft_dpo", "base_gate_matched", selective_accuracy)
+    vs_logprob = compare("sft_dpo", "base_logprob_matched", selective_accuracy)
+    vs_consistency = compare("sft_dpo", "base_consistency_matched", selective_accuracy)
     c64 = compare("sft_dpo_gate_deployed", "sft_dpo", cost_per_question)
     c65 = compare("sft_dpo_gate_deployed", "base_gate_deployed", cost_per_question)
     verdict: dict = {
@@ -98,7 +118,9 @@ def analyse(pool_dir: str | Path, n_boot: int = 2000) -> dict:
                           "replace" if verdict["replace"] else "complement" if verdict["complement"] else "neither")
     return {"table": table, "thresholds": thresholds,
             "replace_selacc_sft_dpo_vs_matched_gate": replace,
-            "complement_cost_vs_sft_dpo": c64, "complement_cost_vs_base_gate": c65, "verdict": verdict}
+            "complement_cost_vs_sft_dpo": c64, "complement_cost_vs_base_gate": c65,
+            "sft_dpo_vs_logprob_baseline": vs_logprob, "sft_dpo_vs_consistency_baseline": vs_consistency,
+            "verdict": verdict}
 
 
 def render(res: dict) -> str:

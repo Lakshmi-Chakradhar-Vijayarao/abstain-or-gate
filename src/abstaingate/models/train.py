@@ -162,6 +162,9 @@ def train_seed(sft_rows: list[dict], pair_rows: list[dict], out: str | Path, see
                      args=DPOConfig(output_dir=str(out / "dpo_ckpt"), learning_rate=cfg.dpo_lr, beta=cfg.dpo_beta,
                                     num_train_epochs=cfg.dpo_epochs, max_length=cfg.max_length, **common))
     info["dpo_train"] = dpo.train().metrics
+    # likelihood displacement: does DPO raise the chosen answer, or mostly lower both?
+    info["dpo_log_history"] = [{k: v for k, v in h.items() if k.startswith(("logps/", "rewards/", "loss", "step", "epoch"))}
+                               for h in dpo.state.log_history]
     dpo.model.save_pretrained(str(out / "dpo_adapter"))
     del dpo, model
     _merge(str(out / "sft_merged"), out / "dpo_adapter", out / "dpo_merged")

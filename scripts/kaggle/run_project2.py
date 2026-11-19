@@ -31,7 +31,9 @@ DRY = os.environ.get("GATEDRAG_DRYRUN") == "1"
 BASE = os.environ.get("P2_BASE_MODEL", "Qwen/Qwen2.5-3B-Instruct")
 TINY = "trl-internal-testing/tiny-Qwen2ForCausalLM-2.5"
 SEEDS = (0, 1) if DRY else (0, 1, 2)
-K_DEV, K_TEST = (2, 2) if DRY else (4, 2)
+K_DEV, K_TEST = (3, 2) if DRY else (8, 2)   # 8 samples per dev item: more distinct answers to pair
+K_SC = 3 if DRY else 5                        # samples for the self-consistency baseline arm
+JUDGE = "mistralai/Mistral-7B-Instruct-v0.3"
 INPUT = Path(os.environ.get("P2_INPUT", "/kaggle/input"))
 OUT = Path(os.environ.get("P2_OUT", "/kaggle/working/out"))
 PORT = 8012
@@ -109,13 +111,13 @@ manifest = json.loads((golden / "MANIFEST.json").read_text())
 log(f"golden {golden.name}: dev {len(dev_items)}, test {len(test_items)}, pilot_only={manifest.get('pilot_only')}")
 
 
-def serve(model: str):
+def serve(model: str, tp: int = 1):
     """vLLM OpenAI server for `model`; returns (process, generator). Dry run: the fake generator."""
     if DRY:
         return None, make_generator("fake")
     cmd = [VLLM_PY, "-m", "vllm.entrypoints.openai.api_server", "--model", model, "--port", str(PORT),
            "--dtype", "half", "--max-model-len", "4096", "--gpu-memory-utilization", "0.85", "--seed", "0",
-           "--tensor-parallel-size", "1"]
+           "--tensor-parallel-size", str(tp)]
     srv_log = open(OUT / f"vllm_{Path(model).name}.log", "w")
     proc = subprocess.Popen(cmd, stdout=srv_log, stderr=subprocess.STDOUT, start_new_session=True)
     for _ in range(180):
@@ -177,19 +179,34 @@ models = {"base": BASE}
 # ---- phase 1: base model on dev, open loop -------------------------------------------------------
 proc, gen = serve(BASE)
 dev_base = pool("dev_base_openloop", gen, open_loop, dev_items, K_DEV)
-built = build(dev_base, dev_raw, prompt_builder(str(chunks)), test_ids=test_ids)
-write_jsonl(built.sft, OUT / "sft.jsonl")
-write_jsonl(built.pairs, OUT / "pairs.jsonl")
-(OUT / "data_counts.json").write_text(json.dumps(built.counts, indent=1))
-log(f"training data: {built.counts}")
 
-# arms 1, 2, 5 use the base model: run them while it is served
+# arms 1, 2, 5 and the self-consistency baseline use the base model: run them while it is served
 cal_base = calibrator_from(dev_base)
 for s in SEEDS:   # base arms have no training seed; the K test runs are repeated per seed slot for pairing
     pool(f"test_base_seed{s}", gen, open_loop, test_items, K_TEST)
     pool(f"test_base_prompt_seed{s}", gen, open_loop.with_(prompt_variant="abstain_strong"), test_items, K_TEST)
     pool(f"test_base_gate_seed{s}", gen, cfg0, test_items, K_TEST, calibrator=cal_base)
+pool("test_base_selfconsistency", gen, open_loop, test_items, K_SC)
 stop(proc)
+
+# ---- phase 1b: label the dev answers with the cross-family judge, then build the training data ------
+# The token scorer penalises correct paraphrases (human audit in gatedrag), which would turn answerable
+# questions into "abstain" pairs. Pairs are labelled by the judge (Mistral-7B, a different family).
+label = "correct"
+if not DRY:
+    from gatedrag.evaluation.judge import judge_pool
+    judged_path = OUT / "dev_base_openloop_judged.json"
+    if not judged_path.exists():
+        jproc, jgen = serve(JUDGE, tp=2)
+        save_pool(judge_pool(dev_base, dev_items, jgen, concurrency=16), judged_path)
+        stop(jproc)
+    dev_base = load_pool(judged_path)
+    label = "correct_judge"
+built = build(dev_base, dev_raw, prompt_builder(str(chunks)), test_ids=test_ids, label=label, max_pairs_per_item=3)
+write_jsonl(built.sft, OUT / "sft.jsonl")
+write_jsonl(built.pairs, OUT / "pairs.jsonl")
+(OUT / "data_counts.json").write_text(json.dumps({**built.counts, "label": label}, indent=1))
+log(f"training data ({label}): {built.counts}")
 
 # ---- phases 2-4, one seed at a time ---------------------------------------------------------------
 # Merged models (about 6 GB each in fp16) live in MODELS, outside the size-limited run output, and are

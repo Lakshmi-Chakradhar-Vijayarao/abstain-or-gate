@@ -38,9 +38,14 @@ def _is_abstain(text: str) -> bool:
     return text.strip().lower().rstrip(".") in ("i don't know", "i do not know", "")
 
 
-def build(pool: dict, items: list[dict], prompt_for, test_ids: set[str] | frozenset = frozenset()) -> Built:
+def build(pool: dict, items: list[dict], prompt_for, test_ids: set[str] | frozenset = frozenset(),
+          label: str = "correct", max_pairs_per_item: int = 1) -> Built:
     """`prompt_for(item, retrieved_chunk_ids) -> list[messages]` rebuilds the exact prompt.
-    `items` are golden dicts (dev split). Raises if any item is in `test_ids`."""
+    `items` are golden dicts (dev split). Raises if any item is in `test_ids`.
+    `label` is the score that decides correctness: "correct" (token scorer) or "correct_judge" (the
+    LLM judge; a human audit found the token scorer penalises correct paraphrases, which would turn
+    answerable questions into type-A "abstain" pairs). `max_pairs_per_item` > 1 uses several distinct
+    sampled answers per item, so the pair count is not capped at one per question."""
     leak = [i["id"] for i in items if i["id"] in test_ids]
     if leak:
         raise ValueError(f"{len(leak)} test-split item(s) passed to the training-data builder: {leak[:5]}")
@@ -65,12 +70,14 @@ def build(pool: dict, items: list[dict], prompt_for, test_ids: set[str] | frozen
         meta = {"item": item_id, "cluster": it.get("cluster") or (it.get("gold_docs") or [item_id])[0]}
         shipped = [rec["answer"] for _, rec in samples if not _is_abstain(rec["answer"])]
         if it.get("answerable"):
-            correct = sorted({rec["answer"] for sc, rec in samples if sc["correct"] == 1.0}, key=len)
+            correct = sorted({rec["answer"] for sc, rec in samples if sc.get(label, sc["correct"]) == 1.0
+                              and not _is_abstain(rec["answer"])}, key=len)
             if correct:
                 sft.append({"prompt": prompt, "completion": correct[0], **meta})
-                pairs.append({"prompt": prompt, "chosen": correct[0], "rejected": ABSTAIN, "type": "B", **meta})
+                for ans in correct[:max_pairs_per_item]:
+                    pairs.append({"prompt": prompt, "chosen": ans, "rejected": ABSTAIN, "type": "B", **meta})
+                    counts["pair_B"] += 1
                 counts["sft_answer"] += 1
-                counts["pair_B"] += 1
                 continue
             sft.append({"prompt": prompt, "completion": ABSTAIN, **meta})
             counts["sft_abstain"] += 1
@@ -78,8 +85,9 @@ def build(pool: dict, items: list[dict], prompt_for, test_ids: set[str] | frozen
             sft.append({"prompt": prompt, "completion": ABSTAIN, **meta})
             counts["sft_abstain"] += 1
         if shipped:
-            pairs.append({"prompt": prompt, "chosen": ABSTAIN, "rejected": sorted(shipped, key=len)[0], "type": "A", **meta})
-            counts["pair_A"] += 1
+            for ans in sorted(set(shipped), key=len)[:max_pairs_per_item]:
+                pairs.append({"prompt": prompt, "chosen": ABSTAIN, "rejected": ans, "type": "A", **meta})
+                counts["pair_A"] += 1
         else:
             counts["no_pair"] += 1
     return Built(sft, pairs, counts)
