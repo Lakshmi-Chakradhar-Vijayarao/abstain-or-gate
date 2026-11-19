@@ -74,6 +74,11 @@ All arms use the same retrieval, prompt (except arm 2) and verifier. Arms 1–4 
    - The DPO log history (the chosen and rejected log-probabilities per step) is kept for every seed.
    - **Likelihood displacement**, where both fall, is reported next to over-abstention on answerable items. Together they distinguish a calibration gain from a learned refusal style.
 
+## Labelling and reporting rules (19 Nov 2026)
+
+- **Pre-revision pipeline:** any result from the Kaggle pilot started before the additions above (kernel version 8 and earlier) is labelled *pre-revision pipeline*. It has no confidence-baseline arms, uses token-scorer labels, and has one pair per item.
+- **Judge reliability:** the pairs are labelled by the judge, so its error rate on wrong answers is reported with them. The rate is measured on gatedrag's wrong-enriched human batch (batch 3); on batch 1 the judge credited 4 of 9 wrong answers. This bounds how much bad signal can enter training: the share of type-B pairs whose "correct" answer is actually wrong is estimated from that rate.
+
 ## Deviations
 
 - 18 Nov 2026: base model 3B rather than Project 1's served model (see Design).
