@@ -111,3 +111,30 @@ All arms use the same retrieval, prompt (except arm 2) and verifier. Arms 1–4 
     - The trained model is far worse at equal coverage, because of the citation-only targets.
 - **19 Nov 2026: the base arms' "seed slots" were copies.** The three base seed slots in version 9, and in version 10, which runs the same code, contain the same 2 runs with identical answers, because the sampling seed did not change per slot. Point estimates are unaffected, but "6 runs" for base arms means 2 distinct runs. Future runs seed each slot separately (`run_project2.py`, `seed=10_000 * s`).
 - **Judge-scored test arms are reported next to token-scored ones,** with the citation-only rule applied (`docs/evidence/run_v9/judged/`). The judge also credits truncated partial answers (gatedrag `docs/MEASURING_RUN.md` §7); no arm here is length-capped.
+
+## Result: kernel version 10 (20 Nov 2026)
+
+**Status:** MEASURED.
+- Frozen split `455373d18c44cfd6`: 87 dev and 247 test items, 3 seeds.
+- Analysed with the common-coverage and tie-split comparison, both fixed before these results were seen.
+- Kaggle's own `REPORT.md` used the older matched-coverage code. The analysis below re-runs the stored pools with the current code (`docs/evidence/run_v10/report_common_token.json`).
+
+**Training data:** judge labels with the citation-only rule. 50 SFT answer and 37 abstain targets; 15 type-A and 136 type-B pairs.
+- **The fix worked:** the citation-only share of trained-model test answers was 0.04–0.14 across seeds, against 0.27 in version 9. The base model's share is 0.09.
+
+**Pre-registered verdict (token scorer): neither.**
+- **Replace?** Selective accuracy at common coverage, SFT → DPO minus (base + gate): **+0.020 [−0.030, +0.071]**.
+- **Against the confidence baselines:**
+  - log-probability +0.023 [−0.031, +0.076];
+  - self-consistency +0.030 [−0.025, +0.085].
+- **Complement?**
+  - SFT → DPO + gate vs SFT → DPO: −0.312 [−0.440, −0.189], so the gate helps the trained model.
+  - vs base + gate: +0.083 [−0.014, +0.166], so it is no cheaper than gating the base model.
+- **Reading:** at equal coverage, abstention training (QLoRA SFT → DPO, 3B) neither beat the runtime gate nor the two cheap confidence baselines, and adding it to the gate did not lower cost.
+- **Side effects:** ARC-Easy and HellaSwag in `lm_eval_*`.
+
+**Caveats, stated with the result:**
+- **The base arms' 3 seed slots repeat the same 2 runs**, as in version 9. Point estimates are unaffected.
+- **DPO pairs are unbalanced:** 15 type-A against 136 type-B.
+- **No transfer corpus, and no MiniLM check** (see Deviations).
+- **The judge-scored version is reported next to this one** when it finishes.

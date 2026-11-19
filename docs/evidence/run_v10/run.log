@@ -1,0 +1,32 @@
+[   2.0 min] golden golden: dev 87, test 247, pilot_only=False
+[   9.0 min] dev_base_openloop: 8 runs x 87 items
+[  12.8 min] test_base_seed0: 2 runs x 247 items
+[  16.5 min] test_base_prompt_seed0: 2 runs x 247 items
+[  20.3 min] test_base_gate_seed0: 2 runs x 247 items
+[  24.1 min] test_base_seed1: 2 runs x 247 items
+[  27.8 min] test_base_prompt_seed1: 2 runs x 247 items
+[  31.6 min] test_base_gate_seed1: 2 runs x 247 items
+[  35.4 min] test_base_seed2: 2 runs x 247 items
+[  39.2 min] test_base_prompt_seed2: 2 runs x 247 items
+[  42.9 min] test_base_gate_seed2: 2 runs x 247 items
+[  52.5 min] test_base_selfconsistency: 5 runs x 247 items
+[  57.5 min] training data (correct_judge): {'items': 87, 'sft_answer': 50, 'sft_abstain': 37, 'pair_A': 15, 'pair_B': 136, 'no_pair': 27}
+[  89.7 min] seed 0 trained: 0.99 GPU-hours
+[  94.4 min] test_sft_seed0: 2 runs x 247 items
+[  99.0 min] test_sft_dpo_seed0: 2 runs x 247 items
+[ 100.4 min] dev_sft_dpo_openloop_seed0: 2 runs x 87 items
+[ 104.1 min] test_sft_dpo_gate_seed0: 2 runs x 247 items
+[ 107.2 min] seed 0 evaluated; merged models deleted
+[ 137.4 min] seed 1 trained: 0.99 GPU-hours
+[ 142.0 min] test_sft_seed1: 2 runs x 247 items
+[ 146.8 min] test_sft_dpo_seed1: 2 runs x 247 items
+[ 148.1 min] dev_sft_dpo_openloop_seed1: 2 runs x 87 items
+[ 151.9 min] test_sft_dpo_gate_seed1: 2 runs x 247 items
+[ 152.0 min] seed 1 evaluated; merged models deleted
+[ 181.9 min] seed 2 trained: 0.99 GPU-hours
+[ 186.5 min] test_sft_seed2: 2 runs x 247 items
+[ 191.3 min] test_sft_dpo_seed2: 2 runs x 247 items
+[ 192.7 min] dev_sft_dpo_openloop_seed2: 2 runs x 87 items
+[ 196.4 min] test_sft_dpo_gate_seed2: 2 runs x 247 items
+[ 196.5 min] seed 2 evaluated; merged models deleted
+[ 196.7 min] done; verdict {'replace': False, 'complement': False, 'summary': 'neither'}
