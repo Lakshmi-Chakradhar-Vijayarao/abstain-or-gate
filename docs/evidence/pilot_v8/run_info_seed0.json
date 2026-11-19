@@ -1,0 +1,66 @@
+{
+ "seed": 0,
+ "config": {
+  "base_model": "Qwen/Qwen2.5-3B-Instruct",
+  "lora_r": 16,
+  "lora_alpha": 32,
+  "lora_dropout": 0.05,
+  "sft_lr": 0.0002,
+  "sft_epochs": 2.0,
+  "dpo_lr": 5e-06,
+  "dpo_epochs": 1.0,
+  "dpo_beta": 0.1,
+  "batch_size": 1,
+  "grad_accum": 16,
+  "max_length": 4096,
+  "max_steps": -1,
+  "target_modules": [
+   "q_proj",
+   "k_proj",
+   "v_proj",
+   "o_proj",
+   "gate_proj",
+   "up_proj",
+   "down_proj"
+  ]
+ },
+ "cuda": true,
+ "gpus": [
+  "Tesla T4",
+  "Tesla T4"
+ ],
+ "sft_examples": 87,
+ "sft_train": {
+  "train_runtime": 510.0311,
+  "train_samples_per_second": 0.341,
+  "train_steps_per_second": 0.024,
+  "total_flos": 3094848691666944.0,
+  "train_loss": 0.31187161306540173,
+  "entropy": 0.14129313786321765,
+  "mean_token_accuracy": 0.9580075067022572,
+  "num_tokens": 183908.0,
+  "epoch": 2.0
+ },
+ "sft_hours": 0.1543840699063407,
+ "dpo_train": {
+  "train_runtime": 394.0602,
+  "train_samples_per_second": 0.14,
+  "train_steps_per_second": 0.01,
+  "total_flos": 1994101838954496.0,
+  "train_loss": 0.6794074177742004,
+  "entropy": 0.2600971122356978,
+  "num_tokens": 115472.0,
+  "logits/chosen": -1.656954789901251,
+  "logits/rejected": -1.314538601708828,
+  "mean_token_accuracy": 0.9365818587216463,
+  "rewards/chosen": -0.0016508433361939916,
+  "rewards/rejected": -0.024903646183454177,
+  "rewards/accuracies": 0.5636363636363636,
+  "rewards/margins": 0.023252803087234496,
+  "logps/chosen": -7.030640058100901,
+  "logps/rejected": -6.195466879822991,
+  "epoch": 1.0
+ },
+ "dpo_hours": 0.12101670265197755,
+ "gpu_hours": 0.5508015451166365
+}

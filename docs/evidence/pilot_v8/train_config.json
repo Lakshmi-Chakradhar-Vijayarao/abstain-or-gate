@@ -1,0 +1,1 @@
+{"base_model": "Qwen/Qwen2.5-3B-Instruct", "lora_r": 16, "lora_alpha": 32, "lora_dropout": 0.05, "sft_lr": 0.0002, "sft_epochs": 2.0, "dpo_lr": 5e-06, "dpo_epochs": 1.0, "dpo_beta": 0.1, "batch_size": 1, "grad_accum": 16, "max_length": 4096, "max_steps": -1, "target_modules": ["q_proj", "k_proj", "v_proj", "o_proj", "gate_proj", "up_proj", "down_proj"]}

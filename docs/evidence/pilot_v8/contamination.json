@@ -1,0 +1,9 @@
+{
+ "n_train": 87,
+ "n_test": 254,
+ "ngram_n": 8,
+ "ngram_max": 1.0,
+ "ngram_mean": 0.009805676028464355,
+ "ngram_flagged": 2,
+ "exact_duplicates": 2
+}
