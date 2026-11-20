@@ -36,7 +36,7 @@ Frozen split (87 dev, 247 test items), Qwen2.5-3B, 3 seeds. Arms are compared at
 - **The first full run was void.** The judge credited bare-citation answers ("[1]"), "shortest correct answer" made 14 of 55 training targets a bare citation, and the trained models learned to answer that way.
 - **The matched-coverage comparison failed twice:** a gate can't raise coverage, and tied scores at the cut were all dropped.
 
-All three were fixed and logged as deviations before the final run. Caveats are listed with the result: duplicated base runs, unbalanced DPO pairs, and no transfer corpus.
+All three were fixed and logged as deviations before the final run's results were seen; two of them after that run had started. Caveats are listed with the result: duplicated base runs, unbalanced DPO pairs, and no transfer corpus.
 
 ## How the training data is built
 
